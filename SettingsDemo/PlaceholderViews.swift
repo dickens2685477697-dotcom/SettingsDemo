@@ -40,10 +40,7 @@ struct LinkShareSheet: View {
                         .font(.footnote.monospaced())
                         .textSelection(.enabled)
 
-                    Button(
-                        app.localized(copied ? "已复制" : "复制链接", copied ? "Copied" : "Copy Link"),
-                        systemImage: copied ? "checkmark" : "doc.on.doc"
-                    ) {
+                    Button(app.localized(copied ? "已复制" : "复制链接", copied ? "Copied" : "Copy Link")) {
                         UIPasteboard.general.url = url
                         copied = true
                     }
@@ -56,7 +53,7 @@ struct LinkShareSheet: View {
                             "View the project prototype with IxDL Studio"
                         ))
                     ) {
-                        Label(app.localized("分享链接", "Share Link"), systemImage: "square.and.arrow.up")
+                        Text(app.localized("分享链接", "Share Link"))
                     }
                 }
 
@@ -96,52 +93,13 @@ struct QRShareSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        BrandLockup()
-
-                        HStack(alignment: .center, spacing: 20) {
-                            Group {
-                                if let qrImage {
-                                    Image(uiImage: qrImage)
-                                        .resizable()
-                                        .interpolation(.none)
-                                } else {
-                                    Image(systemName: "qrcode")
-                                        .resizable()
-                                }
-                            }
-                            .frame(width: 150, height: 150)
-                            .padding(10)
-                            .background(.white, in: RoundedRectangle(cornerRadius: 16))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color(.separator))
-                            }
-
-                            VStack(alignment: .leading, spacing: 10) {
-                                Label(app.localized("二维码已生成", "QR Code Ready"), systemImage: "checkmark.circle.fill")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.pink)
-                                Text(app.localized("扫码查看项目", "Scan to View Project"))
-                                    .font(.title2.weight(.bold))
-                                Text(app.localized(
-                                    "可通过 IxDL Studio 或系统相机扫码，在手机上快速打开项目。",
-                                    "Scan with IxDL Studio or the system camera to quickly open the project on your device."
-                                ))
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .padding(24)
-                    .frame(maxWidth: 560, alignment: .leading)
-                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18))
-                    .shadow(color: .black.opacity(0.08), radius: 16, y: 6)
+                    qrCard
+                        .frame(maxWidth: 560)
 
                     Button(
                         app.localized("保存到手机", "Save to Photos"),
                         systemImage: "square.and.arrow.down",
-                        action: saveQRCode
+                        action: saveShareCard
                     )
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
@@ -164,7 +122,7 @@ struct QRShareSheet: View {
                     Button(app.localized("完成", "Done")) { dismiss() }
                 }
             }
-            .alert(app.localized("保存二维码", "Save QR Code"), isPresented: Binding(
+            .alert(app.localized("保存分享卡片", "Save Share Card"), isPresented: Binding(
                 get: { saveMessage != nil },
                 set: { if !$0 { saveMessage = nil } }
             )) {
@@ -175,8 +133,66 @@ struct QRShareSheet: View {
         }
     }
 
-    private func saveQRCode() {
-        guard let qrImage else { return }
+    private var qrCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            BrandLockup()
+
+            HStack(alignment: .center, spacing: 20) {
+                Group {
+                    if let qrImage {
+                        Image(uiImage: qrImage)
+                            .resizable()
+                            .interpolation(.none)
+                    } else {
+                        Image(systemName: "qrcode")
+                            .resizable()
+                    }
+                }
+                .frame(width: 150, height: 150)
+                .padding(10)
+                .background(.white, in: RoundedRectangle(cornerRadius: 16))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color(.separator))
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(app.localized("二维码已生成", "QR Code Ready"), systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.pink)
+                    Text(app.localized("扫码查看项目", "Scan to View Project"))
+                        .font(.title2.weight(.bold))
+                    Text(app.localized(
+                        "可通过 IxDL Studio 或系统相机扫码，在手机上快速打开项目。",
+                        "Scan with IxDL Studio or the system camera to quickly open the project on your device."
+                    ))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18))
+        .shadow(color: .black.opacity(0.08), radius: 16, y: 6)
+    }
+
+    private func saveShareCard() {
+        guard qrImage != nil else {
+            saveMessage = app.localized("二维码生成失败，请稍后再试。", "The QR code could not be generated. Try again later.")
+            return
+        }
+        let renderer = ImageRenderer(content: qrCard
+            .frame(width: 560)
+            .padding(16)
+            .background(Color(.secondarySystemBackground))
+            .environmentObject(app)
+            .environment(\.colorScheme, .light))
+        renderer.scale = 3
+        guard let cardData = renderer.uiImage?.pngData() else {
+            saveMessage = app.localized("卡片生成失败，请稍后再试。", "The card could not be generated. Try again later.")
+            return
+        }
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             guard status == .authorized || status == .limited else {
                 DispatchQueue.main.async {
@@ -188,12 +204,12 @@ struct QRShareSheet: View {
                 return
             }
             PHPhotoLibrary.shared().performChanges {
-                PHAssetChangeRequest.creationRequestForAsset(from: qrImage)
+                PHAssetCreationRequest.forAsset().addResource(with: .photo, data: cardData, options: nil)
             } completionHandler: { success, _ in
                 DispatchQueue.main.async {
                     saveMessage = app.localized(
-                        success ? "二维码已保存到照片。" : "保存失败，请稍后再试。",
-                        success ? "The QR code was saved to Photos." : "The QR code could not be saved. Try again later."
+                        success ? "分享卡片已保存到照片。" : "保存失败，请稍后再试。",
+                        success ? "The share card was saved to Photos." : "The share card could not be saved. Try again later."
                     )
                 }
             }
@@ -364,22 +380,9 @@ struct PrototypeView: View {
                 .padding()
             }
 
-            VStack {
-                HStack {
-                    Spacer()
-                    Button {
-                        isShowingActions = true
-                    } label: {
-                        Image(systemName: "ellipsis")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .accessibilityLabel(app.localized("原型操作", "Prototype Actions"))
-                }
-                Spacer()
-            }
-            .padding()
         }
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
         .background {
             GestureExitCapture(
                 shakeEnabled: app.shakeToCloseEnabled,

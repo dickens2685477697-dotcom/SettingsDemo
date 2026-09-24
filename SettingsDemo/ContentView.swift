@@ -1,4 +1,3 @@
-import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -29,20 +28,17 @@ struct ProjectItem: Identifiable, Hashable {
     let id: UUID
     var name: String
     var updatedAt: Date
-    var sizeDescription: String
     var thumbnailData: Data?
 
     init(
         id: UUID = UUID(),
         name: String,
         updatedAt: Date,
-        sizeDescription: String = "500 KB",
         thumbnailData: Data? = nil
     ) {
         self.id = id
         self.name = name
         self.updatedAt = updatedAt
-        self.sizeDescription = sizeDescription
         self.thumbnailData = thumbnailData
     }
 }
@@ -129,15 +125,10 @@ final class AppModel: ObservableObject {
         let project = ProjectItem(
             name: localized("新项目 \(projects.count + 1)", "New Project \(projects.count + 1)"),
             updatedAt: .now,
-            sizeDescription: ByteCountFormatter.string(fromByteCount: Int64(imageData.count), countStyle: .file),
             thumbnailData: imageData
         )
         projects.append(project)
         return project
-    }
-
-    func remove(_ project: ProjectItem) {
-        projects.removeAll { $0.id == project.id }
     }
 
     func shareURL(for project: ProjectItem) -> URL {
@@ -244,12 +235,14 @@ private struct LoginView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 32) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(app.localized("登录到", "Sign in to"))
-                            .font(.largeTitle.weight(.semibold))
-                        BrandLockup(isLarge: true)
-                    }
-                    .accessibilityElement(children: .combine)
+                    Image("LoginHeader")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 382)
+                        .accessibilityLabel(app.localized(
+                            "登录到 IxDL studio",
+                            "Sign in to IxDL studio"
+                        ))
 
                     VStack(spacing: 20) {
                         Label {
@@ -360,7 +353,8 @@ private struct AdaptiveHomeView: View {
     @State private var sheet: HomeSheet?
     @State private var actionProject: ProjectItem?
     @State private var isShowingProjectActions = false
-    @State private var importedPhoto: PhotosPickerItem?
+    @State private var isShowingCamera = false
+    @State private var isShowingCameraUnavailable = false
 
     var body: some View {
         Group {
@@ -386,8 +380,27 @@ private struct AdaptiveHomeView: View {
                 QRShareSheet(project: project, url: app.shareURL(for: project))
             }
         }
+        .fullScreenCover(isPresented: $isShowingCamera) {
+            CameraCaptureView { image in
+                guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+                let project = app.importProject(imageData: data)
+                selectedProjectID = project.id
+            }
+            .ignoresSafeArea()
+        }
+        .alert(
+            app.localized("无法使用相机", "Camera Unavailable"),
+            isPresented: $isShowingCameraUnavailable
+        ) {
+            Button(app.localized("好", "OK"), role: .cancel) { }
+        } message: {
+            Text(app.localized(
+                "当前设备没有可用的摄像头。",
+                "No camera is available on this device."
+            ))
+        }
         .confirmationDialog(
-            actionProject.map { "\($0.name)  \($0.sizeDescription)" }
+            actionProject?.name
                 ?? app.localized("项目操作", "Project Actions"),
             isPresented: $isShowingProjectActions,
             titleVisibility: .visible
@@ -395,21 +408,8 @@ private struct AdaptiveHomeView: View {
             if let project = actionProject {
                 Button(app.localized("生成链接分享", "Share with Link")) { sheet = .link(project) }
                 Button(app.localized("生成二维码分享", "Share with QR Code")) { sheet = .qr(project) }
-                Button(app.localized("移除项目原型", "Remove Project Prototype"), role: .destructive) {
-                    app.remove(project)
-                    if selectedProjectID == project.id { selectedProjectID = nil }
-                }
             }
             Button(app.localized("取消", "Cancel"), role: .cancel) { }
-        }
-        .onChange(of: importedPhoto) { newValue in
-            guard let newValue else { return }
-            Task {
-                guard let data = try? await newValue.loadTransferable(type: Data.self) else { return }
-                let project = app.importProject(imageData: data)
-                selectedProjectID = project.id
-                importedPhoto = nil
-            }
         }
     }
 
@@ -418,7 +418,7 @@ private struct AdaptiveHomeView: View {
             projectList { project in
                 app.activeProject = project
             }
-            .toolbar { homeToolbar }
+            .toolbar { homeToolbar(isPad: false) }
         }
     }
 
@@ -427,8 +427,7 @@ private struct AdaptiveHomeView: View {
             projectList { project in
                 selectedProjectID = project.id
             }
-            .navigationTitle(app.localized("项目原型", "Project Prototypes"))
-            .toolbar { homeToolbar }
+            .toolbar { homeToolbar(isPad: true) }
         } detail: {
             if let project = app.sortedProjects.first(where: { $0.id == selectedProjectID }) {
                 ProjectDetailView(project: project) {
@@ -475,32 +474,123 @@ private struct AdaptiveHomeView: View {
     }
 
     @ToolbarContentBuilder
-    private var homeToolbar: some ToolbarContent {
+    private func homeToolbar(isPad: Bool) -> some ToolbarContent {
         if #available(iOS 26.0, *) {
             ToolbarItem(placement: .navigationBarLeading) {
-                BrandLockup()
+                HomeHeaderLockup()
             }
             .sharedBackgroundVisibility(.hidden)
         } else {
             ToolbarItem(placement: .navigationBarLeading) {
-                BrandLockup()
+                HomeHeaderLockup()
             }
         }
-        ToolbarItemGroup(placement: .navigationBarTrailing) {
-            PhotosPicker(selection: $importedPhoto, matching: .images) {
-                Image(systemName: "camera")
+        if isPad {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                HStack(spacing: 8) {
+                    cameraButton(isPad: true)
+                    scannerButton(isPad: true)
+                    settingsButton(isPad: true)
+                }
+                .buttonStyle(.plain)
             }
-            .accessibilityLabel(app.localized("导入项目预览", "Import Project Preview"))
+        } else {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                cameraButton(isPad: false)
+                scannerButton(isPad: false)
+                settingsButton(isPad: false)
+            }
+        }
+    }
 
-            Button { sheet = .scanner } label: {
-                Image(systemName: "qrcode.viewfinder")
+    private func cameraButton(isPad: Bool) -> some View {
+        Button {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                isShowingCamera = true
+            } else {
+                isShowingCameraUnavailable = true
             }
-            .accessibilityLabel(app.localized("扫描项目二维码", "Scan Project QR Code"))
+        } label: {
+            ToolbarIcon(name: isPad ? "IPadToolbarCamera" : "ToolbarCamera")
+        }
+        .accessibilityLabel(app.localized("拍摄项目预览", "Capture Project Preview"))
+    }
 
-            Button { sheet = .settings } label: {
-                Image(systemName: "gearshape")
+    private func scannerButton(isPad: Bool) -> some View {
+        Button { sheet = .scanner } label: {
+            ToolbarIcon(name: isPad ? "IPadToolbarScanner" : "ToolbarScanner")
+        }
+        .accessibilityLabel(app.localized("扫描项目二维码", "Scan Project QR Code"))
+    }
+
+    private func settingsButton(isPad: Bool) -> some View {
+        Button { sheet = .settings } label: {
+            ToolbarIcon(name: isPad ? "IPadToolbarSettings" : "ToolbarSettings")
+        }
+        .accessibilityLabel(app.localized("设置", "Settings"))
+    }
+}
+
+private struct ToolbarIcon: View {
+    let name: String
+
+    var body: some View {
+        Image(name)
+            .resizable()
+            .renderingMode(.original)
+            .scaledToFit()
+            .frame(width: 26, height: 26)
+    }
+}
+
+private struct HomeHeaderLockup: View {
+    var body: some View {
+        Image("HomeHeader")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 153, height: 22)
+            .fixedSize()
+            .accessibilityLabel("IxDL studio")
+    }
+}
+
+private struct CameraCaptureView: UIViewControllerRepresentable {
+    @Environment(\.dismiss) private var dismiss
+    let onCapture: (UIImage) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.cameraCaptureMode = .photo
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) { }
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let parent: CameraCaptureView
+
+        init(parent: CameraCaptureView) {
+            self.parent = parent
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            if let image = info[.originalImage] as? UIImage {
+                parent.onCapture(image)
             }
-            .accessibilityLabel(app.localized("设置", "Settings"))
+            parent.dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
         }
     }
 }
@@ -608,23 +698,14 @@ private struct ProjectDetailView: View {
 }
 
 struct BrandLockup: View {
-    var isLarge = false
-
     var body: some View {
-        HStack(alignment: .lastTextBaseline, spacing: isLarge ? 12 : 8) {
-            Image("IxDLLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: isLarge ? 118 : 62, height: isLarge ? 40 : 22)
-                .alignmentGuide(.lastTextBaseline) { dimensions in
-                    dimensions[.bottom]
-                }
-            Text("studio")
-                .font(isLarge ? .largeTitle.weight(.semibold) : .title2.weight(.semibold))
-        }
-        .fixedSize(horizontal: true, vertical: false)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("IxDL studio")
+        Image("HomeHeader")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 186, height: 27)
+            .fixedSize()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("IxDL studio")
     }
 }
 

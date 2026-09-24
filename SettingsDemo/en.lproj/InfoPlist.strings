@@ -1,2 +1,2 @@
-"NSCameraUsageDescription" = "Scan IxDL Studio project share QR codes.";
-"NSPhotoLibraryAddUsageDescription" = "Save project share QR codes to Photos.";
+"NSCameraUsageDescription" = "Capture project previews and scan IxDL Studio project share QR codes.";
+"NSPhotoLibraryAddUsageDescription" = "Save project share cards to Photos.";

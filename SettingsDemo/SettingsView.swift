@@ -63,12 +63,20 @@ struct SettingsView: View {
 
     private var languageSection: some View {
         Section(app.localized("语言", "Language")) {
-            Picker(app.localized("界面语言", "App Language"), selection: $app.language) {
-                ForEach(AppLanguage.allCases) { language in
-                    Text(language.title).tag(language)
+            HStack(spacing: 20) {
+                Text(app.localized("界面语言", "App Language"))
+                    .fixedSize()
+
+                Picker(app.localized("界面语言", "App Language"), selection: $app.language) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.title).tag(language)
+                    }
                 }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(maxWidth: .infinity)
             }
-            .pickerStyle(.segmented)
+            .padding(.vertical, 4)
         }
     }
 

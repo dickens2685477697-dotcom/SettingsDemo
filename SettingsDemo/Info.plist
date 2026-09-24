@@ -36,9 +36,9 @@
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>NSCameraUsageDescription</key>
-    <string>扫描 IxDL Studio 项目分享二维码。</string>
+    <string>用于拍摄项目预览和扫描 IxDL Studio 项目分享二维码。</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>将项目分享二维码保存到照片。</string>
+    <string>将项目分享卡片保存到照片。</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
